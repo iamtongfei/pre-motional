@@ -1,3 +1,7 @@
+# NumPy quickstart:
+
+[https://numpy.org/doc/stable/user/quickstart.html](https://numpy.org/doc/stable/user/quickstart.html)
+
 Core concepts to practice:
 
 - Array creation and reshaping: np.zeros, np.ones, reshape, transpose
