@@ -1,10 +1,55 @@
 # CIFAR-10 Training on AWS EC2 — Full Workflow
 
 ## Key Info
-- **Instance ID:** `i-033be867bfca382d2`
+- **Instance ID:** `i-033be867bfca382d2` (on-demand g4dn.xlarge)
 - **Region:** `us-west-2`
 - **Profile:** `pnnl`
-- **S3 Bucket:** `pnnl-s3` ← replace this once you create it
+- **S3 Bucket:** `pnnl-s3`
+- **Checkpoint key:** `s3://pnnl-s3/checkpoints/cifar10_v2_checkpoint.pth`
+
+---
+
+## Spot Instance — Launch & Resume (save ~65% vs on-demand)
+
+### Launch a Spot instance (first time or after interruption)
+
+```bash
+# Get your current AMI id from the running instance
+aws ec2 describe-instances \
+  --instance-ids i-033be867bfca382d2 \
+  --region us-west-2 --profile pnnl \
+  --query 'Reservations[0].Instances[0].ImageId' --output text
+
+# Request a Spot instance with same spec (replace ami-XXXXXXXX with output above)
+aws ec2 run-instances \
+  --image-id ami-XXXXXXXX \
+  --instance-type g4dn.xlarge \
+  --region us-west-2 \
+  --profile pnnl \
+  --instance-market-options '{"MarketType":"spot","SpotOptions":{"SpotInstanceType":"one-time"}}' \
+  --iam-instance-profile Name=EC2-SSM-Role \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=cifar10-spot}]' \
+  --query 'Instances[0].InstanceId' --output text
+```
+
+> Spot g4dn.xlarge ≈ $0.18/hr vs $0.53/hr on-demand.
+> AWS gives a **2-minute warning** before reclaiming — the script handles this automatically.
+
+### Resume after interruption (on new Spot or same instance)
+
+Just run the script again — it auto-downloads the S3 checkpoint and picks up from the last saved epoch:
+
+```bash
+cd ~/cifar10
+python3 cifar10_v2.py
+# Output: "Resumed from checkpoint — epoch 50, best acc: 87.3%"
+```
+
+### Delete checkpoint after successful training
+
+```bash
+aws s3 rm s3://pnnl-s3/checkpoints/cifar10_v2_checkpoint.pth --profile pnnl
+```
 
 ---
 
