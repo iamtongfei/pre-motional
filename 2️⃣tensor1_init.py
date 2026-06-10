@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 
-# Initialization
+########################## 1 START ##########################
+# 1 - Initialization
 shape = (2, 3,)
 rand_tensor = torch.rand(shape)
 ones_tensor = torch.ones(shape)
@@ -11,14 +12,14 @@ print(f"Random Tensor: \n {rand_tensor} \n")
 print(f"Ones Tensor: \n {ones_tensor} \n")
 print(f"Zeros Tensor: \n {zeros_tensor}")
 
-    # from numpy -> tensor
+# 2 - from numpy -> tensor
 n = np.ones(5)
 t = torch.from_numpy(n)
 np.add(n, 1, out=n)
 print(f"t: {t}") # >>> t: tensor([2., 2., 2., 2., 2.], dtype=torch.float64)
 print(f"n: {n}") # >>> n: [2. 2. 2. 2. 2.]
 
-# Devices check
+# 3 - Devices check
 # We move our tensor to the GPU if available
 tensor = torch.rand(3, 4)
 
@@ -32,3 +33,5 @@ tensor = tensor.to(device)
 print(f"Device tensor is stored on: {tensor.device}")
 # 第一次打印 cpu — tensor 刚创建时默认在 CPU 上
 # 第二次打印 mps:0 — 成功移到了 Mac 的 GPU（Apple Silicon 的 Metal Performance Shaders）
+
+
