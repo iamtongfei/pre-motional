@@ -4,7 +4,7 @@
 - **Instance ID:** `i-033be867bfca382d2`
 - **Region:** `us-west-2`
 - **Profile:** `pnnl`
-- **S3 Bucket:** `YOUR-BUCKET-NAME` ← replace this once you create it
+- **S3 Bucket:** `pnnl-s3` ← replace this once you create it
 
 ---
 
@@ -67,6 +67,127 @@ Paste the token when prompted. Your files at `~/cifar10/` are now visible and ed
 
 ---
 
+## Complete Daily Workflow — Edit → Train → Save → Shutdown
+
+### Step 1 — Edit your script in Jupyter (browser)
+
+1. Open `http://localhost:8888` in your Mac browser
+2. Click `cifar10_v2.py` to open and edit it
+3. Make your changes, then **save with `Ctrl+S`**
+
+---
+
+### Step 2 — Run training in Mac Terminal (Terminal 3, new tab)
+
+Open a **new terminal tab** on your Mac and connect via SSM:
+
+```bash
+aws ssm start-session \
+  --target i-033be867bfca382d2 \
+  --region us-west-2 \
+  --profile pnnl
+```
+
+Then inside the SSM session:
+
+```bash
+cd ~/cifar10
+python3 cifar10_v2.py
+```
+
+You'll see live loss output every epoch:
+```
+Using device: cuda
+Epoch  10/100 | Loss: 1.234 | Acc: 62.3%
+Epoch  20/100 | Loss: 0.987 | Acc: 71.5%
+...
+Epoch 100/100 | Loss: 0.312 | Acc: 93.1%
+Training complete!
+Model saved locally: cifar10_v2.pth
+Model uploaded to s3://pnnl-s3/models/cifar10_v2.pth
+```
+
+> Full 100 epochs takes ~15-20 min on T4 GPU.
+
+---
+
+### Step 3 — Edit again while training (or after)
+
+Go back to the browser Jupyter tab, edit the script, save.
+Next time you run `python3 cifar10_v2.py` in Terminal 3, it picks up the new version.
+
+---
+
+### Step 4 — Save model to S3 (before shutting down)
+
+The script auto-uploads at the end. But to manually save anytime:
+
+```bash
+# Inside SSM session (Terminal 3)
+aws s3 cp ~/cifar10/cifar10_v2.pth \
+  s3://pnnl-s3/models/cifar10_v2.pth \
+  --region us-west-2
+```
+
+Verify it uploaded:
+```bash
+aws s3 ls s3://pnnl-s3/models/ --region us-west-2
+```
+
+---
+
+### Step 5 — Shut everything down (avoid charges)
+
+Close in this order:
+
+**Terminal 1 (SSM + Jupyter):**
+```
+Ctrl+C    ← stops Jupyter
+exit      ← closes SSM session
+```
+
+**Terminal 2 (port forward):**
+```
+Ctrl+C    ← closes tunnel
+```
+
+**Terminal 3 (SSM training session):**
+```
+exit      ← closes SSM session
+```
+
+**Stop the EC2 instance (Mac terminal):**
+```bash
+aws ec2 stop-instances \
+  --instance-ids i-033be867bfca382d2 \
+  --region us-west-2 \
+  --profile pnnl
+```
+
+**Verify it stopped:**
+```bash
+aws ec2 describe-instances \
+  --instance-ids i-033be867bfca382d2 \
+  --region us-west-2 \
+  --profile pnnl \
+  --query 'Reservations[0].Instances[0].State.Name'
+```
+
+Should return `"stopped"`. You will not be charged while stopped (EBS storage still costs ~$0.10/GB/month but compute is free).
+
+---
+
+## Terminal Layout Summary
+
+| Terminal Tab | Purpose | What runs there |
+|---|---|---|
+| Terminal 1 | SSM session | Jupyter notebook server |
+| Terminal 2 | Port forward | Tunnel `localhost:8888 → EC2:8888` |
+| Terminal 3 | SSM session | `python3 cifar10_v2.py` training |
+| Browser | Jupyter UI | Edit `.py` files |
+
+---
+
 ## First-Time Setup (do once)
 
 ### Inside SSM session
@@ -86,7 +207,7 @@ mkdir -p ~/cifar10 && cd ~/cifar10
 ### Create S3 bucket (once, on your Mac)
 
 ```bash
-aws s3 mb s3://YOUR-BUCKET-NAME --region us-west-2 --profile pnnl
+aws s3 mb s3://pnnl-s3 --region us-west-2 --profile pnnl
 ```
 
 ---
@@ -107,7 +228,7 @@ import boto3
 # --- Config ---
 EPOCHS = 100
 BATCH_SIZE = 128
-S3_BUCKET = 'YOUR-BUCKET-NAME'
+S3_BUCKET = 'pnnl-s3'
 MODEL_PATH = 'cifar10_v2.pth'
 
 # --- Data (with augmentation) ---
@@ -188,7 +309,7 @@ print(f"Model uploaded to s3://{S3_BUCKET}/models/{MODEL_PATH}")
 Inside SSM session or Jupyter terminal:
 
 ```bash
-aws s3 cp ~/cifar10/cifar10_v2.pth s3://YOUR-BUCKET-NAME/models/cifar10_v2.pth \
+aws s3 cp ~/cifar10/cifar10_v2.pth s3://pnnl-s3/models/cifar10_v2.pth \
   --region us-west-2
 ```
 
@@ -203,7 +324,7 @@ import torch.nn as nn
 
 # Download from S3
 s3 = boto3.client('s3', region_name='us-west-2')
-s3.download_file('YOUR-BUCKET-NAME', 'models/cifar10_v2.pth', 'cifar10_v2.pth')
+s3.download_file('pnnl-s3', 'models/cifar10_v2.pth', 'cifar10_v2.pth')
 
 # Rebuild model and load weights
 net = models.resnet18(num_classes=10)
@@ -251,5 +372,5 @@ aws ec2 stop-instances \
 | Training script | `~/cifar10/cifar10_v2.py` on EC2 |
 | CIFAR-10 data | `~/cifar10/data/` on EC2 |
 | Saved model (local) | `~/cifar10/cifar10_v2.pth` on EC2 |
-| Saved model (cloud) | `s3://YOUR-BUCKET-NAME/models/cifar10_v2.pth` |
+| Saved model (cloud) | `s3://pnnl-s3/models/cifar10_v2.pth` |
 | Jupyter URL | `http://localhost:8888` (when tunnel is open) |
